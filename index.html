@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificador de Bilhetes Esportivos</title>
+    <!-- Carrega o Tailwind CSS para estilização moderna e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: #ffffff;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-radius: 1.5rem;
+            padding: 2rem;
+        }
+        .bet-card {
+            border: 2px solid #00c853; /* Cor verde para destaque */
+            background-color: #e8f5e9; /* Fundo verde claro */
+            padding: 1.5rem;
+            border-radius: 1rem;
+            margin-top: 1rem;
+        }
+        /* Cor de destaque para o botão */
+        .btn-primary {
+            background-color: #00c853;
+            border-color: #00a044;
+        }
+        .btn-primary:hover {
+            background-color: #00a044;
+        }
+        #imagePreview img {
+            max-height: 10rem;
+        }
+        /* Estilo para as quebras de linha no output que separam as partes */
+        .separator {
+            border: 1px solid #00c853;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="text-3xl font-extrabold text-gray-900 mb-4 text-center">
+        🔎 Verificador de Bilhetes (Regras & Fatos)
+    </h1>
+    <p class="text-gray-600 mb-6 text-center">
+        Anexe uma imagem do bilhete e a ferramenta tentará <strong>ler, verificar e justificar</strong> o resultado.
+    </p>
+
+    <div class="mb-6 p-4 border border-gray-200 rounded-xl bg-gray-50">
+        <label for="imageUpload" class="block text-lg font-bold text-gray-700 mb-2 flex items-center">
+            1. Anexar Bilhete Esportivo (Imagem)
+        </label>
+        <input type="file" id="imageUpload" accept="image/*" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-green-500 focus:border-green-500 transition duration-150 mb-4 bg-white">
+        
+        <div id="imagePreview" class="w-full h-40 bg-gray-100 flex items-center justify-center rounded-xl border border-dashed border-gray-400 text-gray-500 hidden overflow-hidden">
+            <p>Pré-visualização da Imagem</p>
+        </div>
+
+        <!-- Campo Oculto para armazenar os dados Base64 para a API -->
+        <textarea id="base64Data" class="hidden"></textarea>
+    </div>
+
+    <div class="mb-6">
+        <label for="textualQuery" class="block text-lg font-bold text-gray-700 mb-2">2. Consulta/Instrução Adicional</label>
+        <textarea id="textualQuery" rows="2" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-green-500 focus:border-green-500 transition duration-150" placeholder="Ex: Confirme este bilhete.">Confirme a aposta no bilhete anexado e justifique o resultado didaticamente.</textarea>
+    </div>
+
+    <button id="verifyButton" class="btn-primary w-full text-white font-bold py-3 px-4 rounded-xl transition duration-300 shadow-lg">
+        Verificar e Justificar Resultado
+    </button>
+
+    <div id="loading" class="text-center mt-6 hidden">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full" role="status"></div>
+        <p class="text-green-600 mt-2">Consultando regras da Esportes da Sorte e estatísticas em tempo real...</p>
+    </div>
+
+    <div id="resultOutput" class="bet-card hidden mt-6">
+        <h2 class="text-2xl font-semibold text-green-800 mb-3">✅ Análise Conclusiva do Bilhete</h2>
+        <div id="verificationText" class="text-gray-800 leading-relaxed mb-4"></div>
+        
+        <!-- PONTO DE ATENÇÃO CRÍTICO SOLICITADO PELO USUÁRIO -->
+        <div id="attentionMessage" class="mt-4 p-4 bg-red-100 border-l-4 border-red-600 text-red-800 rounded-md font-bold shadow-sm">
+            CASO O BILHETE DO CLIENTE NÃO BATA COM A ANALISE, CONSULTE UM LIDER OU ANALISTA PARA ABERTURA DE UM CHAMADO SE NECESSARIO
+        </div>
+
+        <!-- NOVO RECURSO GEMINI: Geração de Perguntas de Treinamento -->
+        <hr style="border: 1px dashed #00c853; margin-top: 1.5rem;"> 
+        
+        <button id="trainingButton" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 font-bold py-3 px-4 rounded-xl transition duration-300 shadow mt-4 hidden flex items-center justify-center">
+            ✨ Gerar Perguntas de Treinamento
+        </button>
+
+        <div id="trainingOutput" class="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg hidden">
+            <h3 class="text-lg font-semibold text-indigo-800 mb-2">Simulação de Atendimento:</h3>
+            <div id="trainingText" class="text-gray-700 text-sm"></div>
+        </div>
+
+    </div>
+
+    <div id="errorOutput" class="mt-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 hidden rounded-md">
+        <p class="font-bold">Erro na Verificação:</p>
+        <p id="errorMessage"></p>
+    </div>
+</div>
+
+<script type="text/javascript">
+    // Variáveis globais (devem ser usadas como estão no Canvas)
+    const apiKey = ""; 
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+    // Elementos da interface
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreview = document.getElementById('imagePreview');
+    const base64DataField = document.getElementById('base64Data');
+    const textualQuery = document.getElementById('textualQuery');
+    
+    const verifyButton = document.getElementById('verifyButton');
+    const loading = document.getElementById('loading');
+    const resultOutput = document.getElementById('resultOutput');
+    const verificationText = document.getElementById('verificationText');
+    // const sourcesList = document.getElementById('sourcesList'); // REMOVIDO: substituído pela mensagem de atenção.
+    const errorOutput = document.getElementById('errorOutput');
+    const errorMessage = document.getElementById('errorMessage');
+
+    // NOVOS ELEMENTOS
+    const trainingButton = document.getElementById('trainingButton');
+    const trainingOutput = document.getElementById('trainingOutput');
+    const trainingText = document.getElementById('trainingText');
+
+
+    /**
+     * Listener para converter o arquivo anexado para Base64.
+     */
+    imageUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // A API Gemini espera o Base64 sem o prefixo 'data:image/...'
+                const base64String = e.target.result.split(',')[1]; 
+                const mimeType = file.type;
+                // Armazena Base64 e MIME type para uso na API
+                base64DataField.value = JSON.stringify({ data: base64String, mimeType: mimeType });
+                
+                // Mostra a pré-visualização da imagem
+                imagePreview.classList.remove('hidden');
+                imagePreview.innerHTML = `<img src="${e.target.result}" alt="Pré-visualização do Bilhete" class="object-contain rounded-xl max-h-40 p-2 mx-auto">`;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            base64DataField.value = '';
+            imagePreview.classList.add('hidden');
+            imagePreview.innerHTML = '<p>Pré-visualização da Imagem</p>';
+        }
+    });
+
+
+    /**
+     * Função auxiliar para fazer uma pausa.
+     * @param {number} ms - Milissegundos para pausar.
+     */
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    
+    /**
+     * NOVO RECURSO: Gera perguntas e respostas de treinamento baseado no resultado da análise.
+     * @param {string} contextText - O texto de análise gerado anteriormente.
+     */
+    async function generateTrainingQuestions(contextText) {
+        if (!contextText || contextText.length < 50) {
+            trainingText.innerHTML = '<p class="text-red-600">Contexto de análise insuficiente para gerar perguntas.</p>';
+            trainingOutput.classList.remove('hidden');
+            return;
+        }
+
+        trainingButton.disabled = true;
+        trainingButton.textContent = 'Gerando...';
+        trainingText.innerHTML = '<div class="animate-spin inline-block w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full mr-2"></div> Analisando o cenário de atendimento...';
+        trainingOutput.classList.remove('hidden');
+
+        const trainingSystemPrompt = `
+            SUA RESPOSTA DEVE SER INTEGRALMENTE EM PORTUGUÊS (PORTUGUÊS DO BRASIL).
+            Você é um gerente de treinamento de atendimento ao cliente da 'Esportes da Sorte'. Seu objetivo é criar um cenário de simulação de atendimento baseado na análise de apostas fornecida.
+            
+            1.  Gere 3 (três) perguntas de acompanhamento que um cliente frustrado ou confuso faria sobre a decisão técnica (o bilhete ter sido VENCEDOR, PERDEDOR ou ANULADO).
+            2.  Para cada pergunta, forneça a 'Resposta Sugerida' que o atendente deve usar para resolver a objeção de forma didática e final.
+            3.  Use tags <strong> para negrito.
+            
+            Texto de Análise de Contexto (Resultado do Bilhete):
+            ---
+            ${contextText}
+            ---
+            
+            Formato de Saída OBRIGATÓRIO (use <br> para quebra de linha):
+            
+            <strong>CENÁRIOS DE TREINAMENTO PARA O OPERADOR</strong><br>
+            <br>
+            <strong>Pergunta de Objeção 1:</strong> [Pergunta do Cliente]?<br>
+            <strong>Resposta Sugerida:</strong> [Resposta profissional e didática].<br>
+            <br>
+            <strong>Pergunta de Objeção 2:</strong> [Pergunta do Cliente]?<br>
+            <strong>Resposta Sugerida:</strong> [Resposta profissional e didática].<br>
+            <br>
+            <strong>Pergunta de Objeção 3:</strong> [Pergunta do Cliente]?<br>
+            <strong>Resposta Sugerida:</strong> [Resposta profissional e didática].
+        `;
+
+        const trainingPayload = {
+            contents: [{ parts: [{ text: "Gere as perguntas de treinamento baseadas na análise fornecida." }] }],
+            // Não precisa de Google Search Grounding aqui.
+            systemInstruction: {
+                parts: [{ text: trainingSystemPrompt }]
+            },
+        };
+
+        const trainingApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        
+        try {
+            const response = await fetch(trainingApiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(trainingPayload)
+            });
+
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (text) {
+                trainingText.innerHTML = text.replace(/\n/g, '<br>');
+            } else {
+                 trainingText.innerHTML = '<p class="text-orange-600">Não foi possível gerar as perguntas de treinamento (conteúdo filtrado ou erro na API secundária).</p>';
+            }
+        } catch (error) {
+            console.error("Erro na geração de perguntas de treinamento:", error);
+            trainingText.innerHTML = `<p class="text-red-600">Erro de rede ou na API: ${error.message}</p>`;
+        } finally {
+            trainingButton.disabled = false;
+            trainingButton.textContent = '✨ Gerar Perguntas de Treinamento';
+        }
+    }
+
+
+    /**
+     * Função principal para chamar a API Gemini com Google Search Grounding e Imagem.
+     */
+    async function verifyBet() {
+        const query = textualQuery.value.trim();
+        const base64String = base64DataField.value;
+
+        if (!base64String) {
+            displayError("Por favor, anexe uma imagem do bilhete para a verificação.");
+            return;
+        }
+
+        // 1. Definições e Interface
+        verifyButton.disabled = true;
+        loading.classList.remove('hidden');
+        resultOutput.classList.add('hidden');
+        errorOutput.classList.add('hidden');
+        trainingButton.classList.add('hidden'); // Esconde o botão de treinamento inicialmente
+        trainingOutput.classList.add('hidden'); // Esconde a saída de treinamento inicialmente
+        
+        // URL das regras fornecida pelo usuário
+        const rulesLink = "https://esportesdasorte.bet.br/ptb/contents/support-rules";
+        
+        // SYSTEM PROMPT APRIMORADO para incluir didatismo, referência às regras e a nova estrutura de 4 partes.
+        const systemPrompt = `SUA RESPOSTA DEVE SER INTEGRALMENTE EM PORTUGUÊS (PORTUGUÊS DO BRASIL).
+
+Você é um <strong>Especialista em Análise de Apostas 100% Factual</strong> e um criador de conteúdo didático para a equipe de atendimento da 'Esportes da Sorte'.
+
+<strong>RIGOR ANALÍTICO (Não aceite similaridades):</strong>
+1.  <strong>EXTRATO EXATO:</strong> Leia o bilhete (imagem) e extraia <strong>EXATAMENTE</strong> o Evento, a Data, o Mercado e a <strong>Condição de Vitória</strong> (ex: "Para ganhar, o time A deve vencer por 2 ou mais gols de diferença").
+2.  <strong>FATO CONCLUÍDO E VERIFICAÇÃO EXTENSIVA E MINUCIOSA:</strong> O bilhete anexo é um registro de um evento. Você <strong>SEMPRE DEVE BUSCAR O RESULTADO FINAL E AS ESTATÍSTICAS DE TEMPO INTEGRAL (FULL-TIME)</strong>. Para validar o resultado (placar, estatísticas, eventos de jogo), você <strong>DEVE</strong> buscar evidências em <strong>no mínimo 10 fontes de pesquisa diferentes</strong>. As fontes <strong>obrigatórias</strong> para esta busca são: <strong>Sofascore, Flashscore, e Oddspedia</strong>. <strong>MUITO IMPORTANTE:</strong> Analise <strong>minuciosamente</strong> todos os detalhes e estatísticas do jogo, incluindo <strong>Gols, Cartões Amarelos/Vermelhos, e o total de Escanteios/Corners</strong>, buscando informações em todas as abas das páginas de estatísticas para formar uma análise completa e inquestionável.
+3.  <strong>APLICAÇÃO EXATA DA REGRA:</strong> Compare a Condição de Vitória (Passo 1) com o Resultado Factual (Passo 2), aplicando as regras da Esportes da Sorte (${rulesLink}). <strong>NÃO USE CONDIÇÕES SIMILARES.</strong>
+
+<strong>FORMATO E DESIGN DA RESPOSTA (MANDATÓRIO):</strong>
+A resposta deve ser formatada com clareza visual e separada nas QUATRO PARTES abaixo, usando a tag <strong> para negrito, quebras de linha (<br>), e o estilo de linha horizontal customizado (\<hr style="border: 1px solid #00c853;"\>) para garantir um design agradável.
+
+<strong>PARTE 1: RESULTADO OFICIAL E FONTES (FATO CONCLUÍDO)</strong>
+<br>
+<strong>RESULTADO FINAL:</strong> [O placar exato e as estatísticas principais relevantes (ex: 7 Escanteios, 5 Cartões Amarelos)].
+<br>
+<strong>VERIFICAÇÃO DE DADOS:</strong> Dados confirmados por <strong>[Mencione a Fonte Confiável: Sofascore, Flashscore, Oddspedia e outras fontes utilizadas para o consenso.]</strong>.
+<br>
+<hr style="border: 1px solid #00c853;">
+<br>
+<strong>PARTE 2: EXPLICAÇÃO TÉCNICA (ANÁLISE RIGOROSA)</strong>
+<br>
+<strong>DECISÃO TÉCNICA:</strong> O bilhete foi considerado <strong>[VENCEDOR/PERDEDOR/ANULADO]</strong>.
+<br>
+<strong>Mercado/Condição:</strong> A aposta era <strong>[Mercado Apostado]</strong> e exigia <strong>[Condição Exata de Vitória]</strong>.
+<br>
+<strong>Justificativa:</strong> Conforme as regras da Esportes da Sorte (e o resultado oficial), a condição <strong>[foi/não foi]</strong> atingida porque [Explicação técnica e direta da comparação entre Fato e Condição. <strong>Cite a principal fonte de estatística</strong> (ex: "segundo o Sofascore") ao mencionar o dado crucial que decidiu o bilhete, como o número de escanteios].
+<br>
+<hr style="border: 1px solid #00c853;">
+<br>
+<strong>PARTE 3: INSTRUÇÃO PARA O OPERADOR</strong>
+<br>
+<strong>RESUMO PARA O ATENDENTE:</strong> [Un parágrafo conciso, em linguagem clara e objetiva, resumindo o porquê da decisão. Este é o seu raciocínio lógico interno para a tomada de decisão.]
+<br>
+<hr style="border: 1px solid #00c853;">
+<br>
+<strong>PARTE 4: SCRIPT PARA O CLIENTE (DIDÁTICO)</strong>
+<br>
+"Olá! Eu verifiquei o seu bilhete referente ao jogo <strong>[Nome do Evento e Data]</strong>.
+<br>
+Nosso sistema e fontes confiáveis (incluindo <strong>Sofascore, Flashscore e Oddspedia</strong>) confirmam que o resultado final foi <strong>[Placar Exato e Estatística Relevante, ex: '5 a 0 e 12 escanteios']</strong>.
+<br>
+Sua aposta era no mercado <strong>[Mercado Apostado]</strong>. Como <strong>[Explicação didática e simples da razão do resultado, ex: 'a aposta exigia um mínimo de 10 escanteios, e o jogo teve 12, conforme o Flashscore, garantindo o resultado']</strong>, o bilhete é considerado <strong>[VENCEDOR/PERDEDOR/ANULADO]</strong> de acordo com as regras de Sportbook da casa. Se precisar de mais detalhes, estou à disposição!"
+
+Mantenha um tom profissional, amigável e informativo.`;
+
+        // --- CONSTRUÇÃO DO PAYLOAD MULTIMODAL ---
+        const contents = [{
+            role: "user",
+            parts: [{ text: query }]
+        }];
+
+        if (base64String) {
+            try {
+                const imageObject = JSON.parse(base64String);
+                contents[0].parts.push({
+                    inlineData: {
+                        mimeType: imageObject.mimeType,
+                        data: imageObject.data
+                    }
+                });
+            } catch (e) {
+                displayError("Erro ao processar a imagem Base64.");
+                return;
+            }
+        }
+        
+        const payload = {
+            contents: contents,
+            tools: [{ "google_search": {} }], 
+            systemInstruction: {
+                parts: [{ text: systemPrompt }]
+            },
+        };
+
+        const maxRetries = 3;
+        let lastError = null;
+
+        // 2. Chamada à API com Backoff Exponencial
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                // **VERIFICAÇÃO DE ERRO HTTP 401**
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                // --- DEBUGGING E CORREÇÃO: Resposta Vazia/Inesperada ---
+                console.log("Gemini API Response Result:", result);
+                
+                const candidate = result.candidates?.[0];
+
+                if (!candidate) {
+                    // Se não há candidatos, verifica se foi bloqueado por segurança
+                    if (result.promptFeedback?.blockReason) {
+                        const blockReason = result.promptFeedback.blockReason;
+                        const safetyRatings = result.promptFeedback.safetyRatings.map(r => `${r.category}: ${r.probability}`).join(', ');
+                        throw new Error(`A solicitação foi bloqueada. Razão: ${blockReason}. Detalhes de segurança: ${safetyRatings}`);
+                    }
+                    throw new Error("Resposta da API vazia ou inesperada. O modelo não gerou um candidato.");
+                }
+
+                if (candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    let sources = [];
+
+                    // 3. Extração de Fontes (Citações)
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    // 4. Exibir o Resultado
+                    displayResult(text, sources);
+                    return; // Sai da função após o sucesso
+
+                } else {
+                    // Candidato existe mas sem conteúdo de texto (ex: filtragem de conteúdo na parte de texto)
+                    throw new Error("Candidato gerado, mas o conteúdo de texto está faltando. Possível bloqueio de conteúdo na resposta.");
+                }
+
+            } catch (error) {
+                lastError = error;
+                console.error(`Tentativa ${attempt + 1} falhou:`, error);
+                
+                // **TRATAMENTO DE ERRO 401**
+                if (error.message.includes('status: 401')) {
+                     // Lança um erro mais específico sobre a autenticação e encerra as tentativas imediatamente
+                    lastError = new Error("Erro de Autenticação (HTTP 401). Isso pode indicar um problema com a chave de API (apiKey) ou com a autenticação do ambiente. Verifique se o seu projeto está configurado corretamente.");
+                    break;
+                }
+                
+                if (attempt < maxRetries - 1) {
+                    const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+                    await sleep(delay);
+                }
+            }
+        }
+        
+        // 5. Exibir Erro Final
+        displayError(lastError ? lastError.message : "Não foi possível obter uma resposta após várias tentativas.");
+    }
+
+    /**
+     * Exibe o resultado da verificação na interface.
+     * @param {string} text - O texto gerado pelo modelo.
+     * @param {Array<Object>} sources - A lista de fontes de pesquisa.
+     */
+    function displayResult(text, sources) {
+        // 1. Converte quebras de linha para <br>
+        let cleanedText = text.replace(/\n/g, '<br>');
+        // 2. Garante que qualquer resquício de Markdown (**) seja convertido para <strong> (Negrito)
+        // Isso resolve o problema de o modelo ocasionalmente usar Markdown ao invés de HTML.
+        cleanedText = cleanedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // 3. Garante que qualquer resquício de Markdown (*) seja convertido para <strong> (Negrito)
+        // Adicionando a checagem para * também, se o modelo usar uma única marcação.
+        cleanedText = cleanedText.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+        
+        verificationText.innerHTML = cleanedText;
+        
+        // Fontes Consultadas (Provas) foi removido do layout.
+
+        // Habilita o botão de treinamento e define o contexto para o segundo LLM
+        trainingButton.classList.remove('hidden');
+        trainingButton.onclick = () => generateTrainingQuestions(text);
+        trainingOutput.classList.add('hidden');
+        trainingText.innerHTML = ''; // Limpa o output anterior
+
+        loading.classList.add('hidden');
+        resultOutput.classList.remove('hidden');
+        verifyButton.disabled = false;
+    }
+
+    /**
+     * Exibe a mensagem de erro na interface.
+     * @param {string} message - A mensagem de erro.
+     */
+    function displayError(message) {
+        errorMessage.textContent = message;
+        loading.classList.add('hidden');
+        errorOutput.classList.remove('hidden');
+        verifyButton.disabled = false;
+        trainingButton.classList.add('hidden');
+        trainingOutput.classList.add('hidden');
+    }
+
+    // Listener do botão
+    verifyButton.addEventListener('click', () => {
+        verifyBet();
+    });
+</script>
+
+</body>
+</html>
